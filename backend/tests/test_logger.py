@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
-from backend.logger import log
+from backend.logger import log, log_path
+
+
+def test_default_log_file_is_in_project_root(monkeypatch):
+    monkeypatch.delenv("NAHAJ_LOG_FILE", raising=False)
+    assert log_path() == Path(__file__).resolve().parents[2] / "nahaj.log"
 
 
 def test_log_prints_and_saves_utc_timestamp_and_message(capsys, monkeypatch, tmp_path):

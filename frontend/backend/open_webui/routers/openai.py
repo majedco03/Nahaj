@@ -175,10 +175,12 @@ async def get_headers_and_cookies(
         ),
     }
 
+    if metadata and metadata.get('chat_id'):
+        headers[FORWARD_SESSION_INFO_HEADER_CHAT_ID] = metadata.get('chat_id')
+    if metadata and metadata.get('task'):
+        headers['X-OpenWebUI-Task'] = str(metadata.get('task'))
     if ENABLE_FORWARD_USER_INFO_HEADERS and user:
         headers = include_user_info_headers(headers, user)
-        if metadata and metadata.get('chat_id'):
-            headers[FORWARD_SESSION_INFO_HEADER_CHAT_ID] = metadata.get('chat_id')
 
     token = None
     auth_type = config.get('auth_type')

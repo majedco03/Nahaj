@@ -4,12 +4,11 @@ import asyncio
 import hashlib
 import json
 import mimetypes
-import os
 import re
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -18,13 +17,13 @@ from zipfile import ZipFile
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, Query, UploadFile, Form
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from starlette.requests import Request
 
 from .app_config import settings
-from .database import get_db, init_db
+from .database import SessionLocal, get_db, init_db
 from .guardrails import safe_final_response
 from .logger import log, log_path
 from .models import (
@@ -54,9 +53,6 @@ from .schemas import (
     ProgressOut,
     QuizDetailOut,
     QuizListOut,
-    QuizOptionOut,
-    QuizQuestionOut,
-    ReviewQuestionOut,
     SemesterInput,
     SemesterOut,
     TaskCreate,
@@ -98,6 +94,16 @@ async def lifespan(app: FastAPI):
     log(f"Starting Nahaj API version={app.version} log_file={log_path()}")
     init_db()
     log("Database initialized")
+    with SessionLocal() as db:
+        pending_document_ids = list(
+            db.scalars(select(Document.id).where(Document.status == "processing")).all()
+        )
+    ingest_workers = [
+        asyncio.create_task(_process_document_ingest(document_id))
+        for document_id in pending_document_ids
+    ]
+    if ingest_workers:
+        log(f"Resumed pending document ingestion count={len(ingest_workers)}")
     worker = None
     if settings.progress_scheduler_enabled and settings.progress_check_interval_minutes > 0:
         worker = asyncio.create_task(_progress_worker())
@@ -105,6 +111,11 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        for ingest_worker in ingest_workers:
+            if not ingest_worker.done():
+                ingest_worker.cancel()
+        if ingest_workers:
+            await asyncio.gather(*ingest_workers, return_exceptions=True)
         if worker:
             worker.cancel()
             try:
@@ -605,7 +616,7 @@ async def _process_document_ingest(document_id: str) -> None:
         # Course materials are indexed once, at upload time. Old exams stay on
         # the existing supervisor path and are intentionally outside the RAG index.
         if document.collection == "slides":
-            CourseIngestor().ingest_document(payload)
+            await asyncio.to_thread(CourseIngestor().ingest_document, payload)
             document.status = "ready"
             document.error = None
             document.updated_at = now_utc()
@@ -1208,7 +1219,7 @@ def list_openai_models():
 
 
 @app.post("/v1/chat/completions", dependencies=[Depends(require_api_key)])
-async def chat_completions(payload: dict[str, Any], db: Session = Depends(get_db)):
+async def chat_completions(payload: dict[str, Any], http_request: Request, db: Session = Depends(get_db)):
     model = payload.get("model")
     if model != "nahaj-supervisor":
         _error(404, "model_not_found", "Only nahaj-supervisor is available.")
@@ -1222,6 +1233,16 @@ async def chat_completions(payload: dict[str, Any], db: Session = Depends(get_db
     document_ids = context.get("document_ids") or []
     if not isinstance(document_ids, list) or any(not isinstance(item, str) for item in document_ids):
         _error(422, "invalid_nahaj_context", "nahaj_context.document_ids must be a list of IDs.")
+    openwebui_task = re.sub(r"[^a-zA-Z0-9_-]", "", http_request.headers.get("x-openwebui-task", ""))[:100]
+    conversation_id = str(
+        context.get("thread_id")
+        or http_request.headers.get("x-openwebui-chat-id")
+        or payload.get("chat_id")
+        or payload.get("conversation_id")
+        or payload.get("session_id")
+        or payload.get("id")
+        or f"request-{getattr(http_request.state, 'request_id', uuid4().hex)}"
+    )[:200]
     request = SupervisorRequest(
         type="chat",
         messages=messages,
@@ -1230,14 +1251,8 @@ async def chat_completions(payload: dict[str, Any], db: Session = Depends(get_db
             "document_ids": document_ids,
             # Open WebUI sends a stable chat_id with each turn. Reuse it as
             # the LangGraph thread so approvals can resume the same workflow.
-            "thread_id": str(
-                context.get("thread_id")
-                or payload.get("chat_id")
-                or payload.get("conversation_id")
-                or payload.get("session_id")
-                or payload.get("id")
-                or "nahaj-default"
-            ),
+            "thread_id": f"{conversation_id}:task:{openwebui_task}" if openwebui_task else conversation_id,
+            "client_task": openwebui_task or None,
             "semester": _active_semester(db).id if _active_semester(db) else None,
             "shared_state": _shared_state_snapshot(db),
         },
@@ -1296,7 +1311,12 @@ async def chat_completions(payload: dict[str, Any], db: Session = Depends(get_db
             yield "data: [DONE]\n\n"
         except Exception as exc:  # pragma: no cover - defensive stream boundary
             log(f"Streaming supervisor request failed: {exc}")
-            yield f"data: {json.dumps({'error': {'code': 'supervisor_error', 'message': str(exc)}})}\n\n"
+            yield _openai_chunk(
+                completion_id,
+                model,
+                {"content": "I couldn't complete that request. Please try again."},
+            )
+            yield _openai_chunk(completion_id, model, {}, "stop")
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

@@ -7,10 +7,10 @@ from math import log
 from pathlib import Path
 import os
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 from .app_config import settings
-from .rag_ingestion import CourseIngestor, chromadb
+from .rag_ingestion import CourseIngestor, LocalHashEmbeddingFunction, chromadb
 
 
 class CourseRetriever:
@@ -30,7 +30,7 @@ class CourseRetriever:
             or (settings.upload_dir / ".chroma")
         ).resolve()
         self.client = client or self._create_client()
-        self.embedding_function = embedding_function
+        self.embedding_function = embedding_function or LocalHashEmbeddingFunction()
 
     def _create_client(self) -> Any:
         if chromadb is None:
@@ -69,6 +69,23 @@ class CourseRetriever:
         if not records:
             return []
 
+        requested_chapters = set(re.findall(r"\bchapter\s*(\d+)\b", query, re.IGNORECASE))
+        if requested_chapters:
+            matching_records = {
+                chunk_id: record
+                for chunk_id, record in records.items()
+                if any(
+                    re.search(
+                        rf"\bchapter\s*{re.escape(chapter)}\b",
+                        f"{record.get('filename', '')} {record.get('section', '')}",
+                        re.IGNORECASE,
+                    )
+                    for chapter in requested_chapters
+                )
+            }
+            if matching_records:
+                records = matching_records
+
         record_ids = list(records)
         record_index = {chunk_id: index for index, chunk_id in enumerate(record_ids)}
         texts = [records[chunk_id]["text"] for chunk_id in record_ids]
@@ -90,7 +107,7 @@ class CourseRetriever:
                 vector_scores[chunk_id] = 1.0 - float(distance)
         except Exception:
             # BM25 remains useful if a collection has no embedding function configured.
-            vector_order = list(record_ids)
+            vector_order = []
 
         rrf_scores = {chunk_id: 0.0 for chunk_id in record_ids}
         for rank, index in enumerate(bm25_order, start=1):

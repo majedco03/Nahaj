@@ -7,10 +7,11 @@ from threading import Lock
 
 
 _write_lock = Lock()
+_project_root = Path(__file__).resolve().parent.parent
 
 
 def log_path() -> Path:
-    return Path(os.getenv("NAHAJ_LOG_FILE", "./logs/nahaj.log"))
+    return Path(os.getenv("NAHAJ_LOG_FILE", str(_project_root / "nahaj.log")))
 
 
 def log(message: object) -> None:

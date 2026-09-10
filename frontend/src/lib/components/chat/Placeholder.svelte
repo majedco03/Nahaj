@@ -29,11 +29,19 @@
 	import FolderTitle from './Placeholder/FolderTitle.svelte';
 
 	const i18n = getContext('i18n');
-	const nahajExamples = [
-		'What should I review from my Slides this week?',
-		'Generate a study plan around my course deadlines.',
-		'Create a four-option quiz from my Past Exams.',
-		'How am I progressing across my semester?'
+	const nahajSuggestions = [
+		{
+			title: ['Review', 'What to study this week'],
+			content: 'What should I review from my Slides this week?'
+		},
+		{
+			title: ['Plan', 'Organize upcoming deadlines'],
+			content: 'Generate a study plan around my course deadlines.'
+		},
+		{
+			title: ['Practice', 'Create a quiz from my material'],
+			content: 'Create a four-option quiz from my Past Exams.'
+		}
 	];
 
 	export let createMessagePair: Function;
@@ -103,6 +111,14 @@
 		$selectedFolder != null &&
 		$selectedFolder.user_id !== $user?.id &&
 		$selectedFolder.permission !== 'write';
+	$: configuredSuggestions =
+		atSelectedModel?.info?.meta?.suggestion_prompts ??
+		models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
+		$config?.default_prompt_suggestions ??
+		[];
+	$: visibleSuggestions = configuredSuggestions.length
+		? configuredSuggestions.slice(0, 3)
+		: nahajSuggestions;
 </script>
 
 <div class="m-auto w-full max-w-[58rem] px-1 @2xl:px-20 translate-y-6 py-24 text-center">
@@ -121,10 +137,9 @@
 	<div class="w-full text-3xl text-gray-800 dark:text-gray-100 text-center flex items-center gap-4">
 		<div class="w-full flex flex-col justify-center items-center">
 			{#if !embedded}
-				<div class="mb-4 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-					<span>Course context</span>
+				<div class="mb-3 flex flex-wrap items-center justify-center gap-2">
 					<select
-						class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none dark:border-gray-700 dark:bg-gray-900"
+						class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-600 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
 						bind:value={selectedNahajCourseId}
 						aria-label="Course context"
 					>
@@ -133,17 +148,14 @@
 							<option value={course.id}>{course.code} · {course.name}</option>
 						{/each}
 					</select>
-					<label class="flex items-center gap-2">
-						<span>Library</span>
-						<select
-							class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none dark:border-gray-700 dark:bg-gray-900"
-							bind:value={selectedNahajCollection}
-							aria-label="Course material library"
-						>
-							<option value="slides">Slides</option>
-							<option value="past_exam">Past Exams</option>
-						</select>
-					</label>
+					<select
+						class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-600 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+						bind:value={selectedNahajCollection}
+						aria-label="Course material library"
+					>
+						<option value="slides">Slides library</option>
+						<option value="past_exam">Past Exams library</option>
+					</select>
 				</div>
 			{/if}
 			{#if $selectedFolder}
@@ -265,15 +277,7 @@
 				</div>
 			{/if}
 
-			<div class="text-base font-normal @md:max-w-3xl w-full py-3 {atSelectedModel ? 'mt-2' : ''}">
-				<div class="mb-3 text-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Ask about your courses, plan, quizzes, or progress. Nahaj keeps the supervisor in one conversation.</p>
-					<div class="mt-3 flex flex-wrap justify-center gap-2">
-						{#each nahajExamples as example}
-							<button class="rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition hover:border-indigo-400 hover:text-indigo-600 dark:border-gray-700 dark:text-gray-300" on:click={() => dispatch('submit', example)}>{example}</button>
-						{/each}
-					</div>
-				</div>
+			<div class="text-base font-normal @md:max-w-3xl w-full py-2 {atSelectedModel ? 'mt-2' : ''}">
 				{#if !($selectedFolder && folderReadOnly)}
 					<MessageInput
 						bind:this={messageInput}
@@ -319,17 +323,14 @@
 	</div>
 
 	{#if $selectedFolder}
-		<div class="mx-auto px-4 md:max-w-3xl md:px-6 min-h-62" in:fade={{ duration: 200, delay: 200 }}>
+		<div class="mx-auto px-4 @3xl:max-w-3xl @3xl:px-6 min-h-62" in:fade={{ duration: 200, delay: 200 }}>
 			<FolderPlaceholder folder={$selectedFolder} />
 		</div>
 	{:else}
 		<div class="mx-auto max-w-2xl mt-2" in:fade={{ duration: 200, delay: 200 }}>
 			<div class="mx-5">
 				<Suggestions
-					suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
-						models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
-						$config?.default_prompt_suggestions ??
-						[]}
+					suggestionPrompts={visibleSuggestions}
 					inputValue={prompt}
 					{onSelect}
 				/>

@@ -20,7 +20,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://nahaj:nahaj@postgres:5432/nahaj
       UPLOAD_DIR: /data/uploads
-      NAHAJ_LOG_FILE: /data/logs/nahaj.log
+      NAHAJ_LOG_FILE: /project/nahaj.log
       NAHAJ_API_KEY: ${NAHAJ_API_KEY:-dev-key}
       SUPERVISOR_FACTORY: ${SUPERVISOR_FACTORY:-backend.workflow:create_supervisor}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -31,7 +31,7 @@ services:
       PROGRESS_SCHEDULER_ENABLED: ${PROGRESS_SCHEDULER_ENABLED:-true}
     volumes:
       - nahaj_uploads:/data/uploads
-      - nahaj_logs:/data/logs
+      - .:/project
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,5 +65,4 @@ services:
 volumes:
   postgres_data:
   nahaj_uploads:
-  nahaj_logs:
   webui_data:

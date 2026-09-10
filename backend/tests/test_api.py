@@ -174,3 +174,29 @@ def test_chat_validates_the_complete_supervisor_output(monkeypatch):
         "I couldn't provide that response because it did not pass the safety check."
     )
     assert "very-secret-value" not in response.text
+
+
+def test_chat_uses_forwarded_openwebui_chat_and_task_ids(monkeypatch):
+    captured = []
+
+    class CapturingGateway:
+        async def handle(self, request):
+            captured.append(request)
+            yield SupervisorEvent("text_delta", {"text": "ok"})
+
+    monkeypatch.setattr(main, "get_supervisor", lambda: CapturingGateway())
+    headers = {
+        **AUTH,
+        "X-OpenWebUI-Chat-Id": "chat-123",
+        "X-OpenWebUI-Task": "title_generation",
+    }
+    with _client() as client:
+        response = client.post(
+            "/v1/chat/completions",
+            headers=headers,
+            json={"model": "nahaj-supervisor", "messages": [{"role": "user", "content": "Make a title"}]},
+        )
+
+    assert response.status_code == 200
+    assert captured[0].context["thread_id"] == "chat-123:task:title_generation"
+    assert captured[0].context["client_task"] == "title_generation"

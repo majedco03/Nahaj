@@ -197,7 +197,7 @@
 
 <svelte:head><title>Courses / Nahaj</title></svelte:head>
 
-<div class="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-8 @md:px-10">
+<div class="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-8 @3xl:px-10">
 	<div class="mx-auto max-w-6xl space-y-8">
 		<div>
 			<p class="text-xs font-medium uppercase tracking-[0.22em] text-indigo-500">Nahaj</p>
@@ -215,7 +215,7 @@
 			<section class="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-5 dark:border-indigo-900/60 dark:bg-indigo-950/20">
 				<h2 class="text-lg font-medium text-gray-900 dark:text-white">Set up your active semester</h2>
 				<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">There is one active semester at a time. You can update these dates later.</p>
-				<form class="mt-4 grid gap-3 @md:grid-cols-4" on:submit|preventDefault={submitSemester}>
+				<form class="mt-4 grid gap-3 @3xl:grid-cols-4" on:submit|preventDefault={submitSemester}>
 					<input class="field" bind:value={semesterForm.name} placeholder="Semester name" required />
 					<input class="field" type="date" bind:value={semesterForm.start_date} required />
 					<input class="field" type="date" bind:value={semesterForm.end_date} required />
@@ -239,7 +239,7 @@
 			</section>
 		{/if}
 
-		<section class="grid gap-5 @lg:grid-cols-[19rem_1fr]">
+		<section class="grid gap-5 @5xl:grid-cols-[19rem_1fr]">
 			<div class="space-y-4">
 				<div class="rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
 					<div class="flex items-center justify-between"><h2 class="font-medium text-gray-900 dark:text-white">Courses</h2><span class="text-xs text-gray-400">{courses.length}</span></div>

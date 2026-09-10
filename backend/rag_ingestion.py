@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from math import sqrt
 import os
 from pathlib import Path
 import re
@@ -15,6 +17,60 @@ try:  # Chroma is installed with the API requirements in deployments.
     import chromadb
 except ImportError:  # Keep the rest of the API importable before dependencies are installed.
     chromadb = None  # type: ignore[assignment]
+
+
+class LocalHashEmbeddingFunction:
+    """Small deterministic embedding function with no model download or network use."""
+
+    dimensions = 256
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        embeddings: list[list[float]] = []
+        for text in input:
+            vector = [0.0] * self.dimensions
+            for token in re.findall(r"\w+", str(text).casefold()):
+                digest = int.from_bytes(
+                    hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(),
+                    "big",
+                )
+                index = (digest >> 1) % self.dimensions
+                vector[index] += -1.0 if digest & 1 else 1.0
+            magnitude = sqrt(sum(value * value for value in vector)) or 1.0
+            embeddings.append([value / magnitude for value in vector])
+        return embeddings
+
+    def embed_documents(self, input: list[str]) -> list[list[float]]:
+        return self(input)
+
+    def embed_query(self, input: list[str]) -> list[list[float]]:
+        return self(input)
+
+    @staticmethod
+    def name() -> str:
+        return "nahaj-local-hash"
+
+    @staticmethod
+    def build_from_config(_config: dict[str, Any]) -> "LocalHashEmbeddingFunction":
+        return LocalHashEmbeddingFunction()
+
+    def get_config(self) -> dict[str, Any]:
+        return {}
+
+    @staticmethod
+    def validate_config(_config: dict[str, Any]) -> None:
+        return None
+
+    def max_tokens(self) -> int:
+        return 8192
+
+    def is_legacy(self) -> bool:
+        return False
+
+    def default_space(self) -> str:
+        return "cosine"
+
+    def supported_spaces(self) -> list[str]:
+        return ["cosine", "l2", "ip"]
 
 
 class CourseIngestor:
@@ -45,7 +101,7 @@ class CourseIngestor:
         self.client = client or self._create_client()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.embedding_function = embedding_function
+        self.embedding_function = embedding_function or LocalHashEmbeddingFunction()
 
     def _create_client(self) -> Any:
         if chromadb is None:
@@ -61,7 +117,16 @@ class CourseIngestor:
         options = {"name": self.collection_name(course_id), "metadata": {"hnsw:space": "cosine"}}
         if self.embedding_function is not None:
             options["embedding_function"] = self.embedding_function
-        return self.client.get_or_create_collection(**options)
+        try:
+            return self.client.get_or_create_collection(**options)
+        except ValueError as exc:
+            if "embedding function conflict" not in str(exc).casefold():
+                raise
+            existing = self.client.get_collection(name=options["name"])
+            if existing.count():
+                raise
+            self.client.delete_collection(name=options["name"])
+            return self.client.create_collection(**options)
 
     def ingest_document(self, document: Mapping[str, Any]) -> dict[str, Any]:
         """Index one document. Calling this again for the same document is idempotent."""
@@ -180,7 +245,7 @@ class CourseIngestor:
 
         def flush() -> None:
             body = "\n".join(lines).strip()
-            if body or title != "General":
+            if body:
                 sections.append((title, body))
 
         for line in str(text).splitlines():
@@ -225,7 +290,7 @@ class CourseIngestor:
         step = self.chunk_size - self.chunk_overlap
         for start in range(0, len(words), step):
             piece = " ".join(words[start : start + self.chunk_size]).strip()
-            if piece:
+            if len(piece.split()) >= 8:
                 yield piece
             if start + self.chunk_size >= len(words):
                 break
