@@ -459,7 +459,11 @@ If chat does not respond after changing `.env`:
 - Add OCR so PNG and JPEG course uploads can contribute text to the RAG index.
 - Add direct synchronization with external calendar providers.
 - Expand automated tests around chained approvals and retrieval fusion, and add end-to-end tests against a live model.
-
+## Future Improvments
+- Finishing the progress agent
+- Daily monitoring for student performance
+- Better memory management on a student semester-wide
+- 
 ## Repository Links
 
 - Project repository: [github.com/majedco03/Nahaj](https://github.com/majedco03/Nahaj)
