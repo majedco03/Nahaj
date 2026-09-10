@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nahaj
+      POSTGRES_USER: nahaj
+      POSTGRES_PASSWORD: nahaj
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nahaj -d nahaj"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://nahaj:nahaj@postgres:5432/nahaj
+      UPLOAD_DIR: /data/uploads
+      NAHAJ_LOG_FILE: /data/logs/nahaj.log
+      NAHAJ_API_KEY: ${NAHAJ_API_KEY:-dev-key}
+      SUPERVISOR_FACTORY: ${SUPERVISOR_FACTORY:-backend.workflow:create_supervisor}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      AGENT_TEMPERATURE: ${AGENT_TEMPERATURE:-0}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-45}
+      AGENT_MAX_RETRIES: ${AGENT_MAX_RETRIES:-2}
+      PROGRESS_SCHEDULER_ENABLED: ${PROGRESS_SCHEDULER_ENABLED:-true}
+    volumes:
+      - nahaj_uploads:/data/uploads
+      - nahaj_logs:/data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  webui:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    environment:
+      WEBUI_AUTH: "false"
+      WEBUI_NAME: Nahaj
+      ENABLE_SIGNUP: "false"
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_OPENAI_API: "true"
+      ENABLE_CALENDAR: "true"
+      ENABLE_NOTES: "false"
+      ENABLE_AUTOMATIONS: "false"
+      ENABLE_CHANNELS: "false"
+      OPENAI_API_BASE_URLS: http://api:8000/v1
+      OPENAI_API_KEYS: ${NAHAJ_API_KEY:-dev-key}
+      NAHAJ_API_URL: http://api:8000
+      NAHAJ_API_KEY: ${NAHAJ_API_KEY:-dev-key}
+    ports:
+      - "3000:8080"
+    volumes:
+      - webui_data:/app/backend/data
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  nahaj_uploads:
+  nahaj_logs:
+  webui_data:

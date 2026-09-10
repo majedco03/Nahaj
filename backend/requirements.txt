@@ -1,0 +1,14 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+sqlalchemy>=2.0,<3
+alembic>=1.14,<2
+psycopg[binary]>=3.2,<4
+python-multipart>=0.0.20,<1
+pydantic>=2.10,<3
+python-dotenv>=1,<2
+pytest>=8,<9
+httpx>=0.28,<1
+chromadb>=1.5,<2
+pypdf>=6,<7
+langgraph>=1,<2
+langchain-openrouter>=0.2,<1

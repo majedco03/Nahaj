@@ -1,0 +1,2 @@
+"""Nahaj semester assistant API."""
+

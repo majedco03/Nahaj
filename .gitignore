@@ -1,0 +1,14 @@
+*.pdf
+.env
+.venv/*
+.venv
+nahaj.db
+nahaj.db-*
+uploads/
+logs/
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+.pytest_cache/
+__pycache__/
+*.py[cod]
