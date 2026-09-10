@@ -464,5 +464,3 @@ If chat does not respond after changing `.env`:
 
 - Project repository: [github.com/majedco03/Nahaj](https://github.com/majedco03/Nahaj)
 - SDAIA Academy: [github.com/SDAIAAcademy](https://github.com/SDAIAAcademy)
-
-Submit the project repository link through the Google Form supplied for the course.
